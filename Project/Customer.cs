@@ -2,23 +2,28 @@
 
 public class Customer : ICustomer
 {
-    public string Name { get; init; }
+    public string Name { get; init; } = string.Empty;
     public int Age { get; init; }
-    public Percentage Patience { get; set; }
+    public Percentage Patience { get; set; } = 100;
 
-    public decimal Budget { get; set; } //Idk ob mit DezimalZahlen gehandelt wird aber zur Sicherheit
-    public List<IProduct> Likes { get; set; } //Liste der Produkte die der Kunde mag
-    public List<IProduct> Dislikes { get; set; } //Liste der Produkte die der Kunde nicht mag
-    public List<IProduct>? Musthaves { get; set; } //Liste der Produkte die der Kunde unbedigt besitzen will
-    public Percentage Elasticity { get; set; } //Wie stark der Kunde auf Preisänderungen reagiert
-    public List<IProduct> Inventory { get; set; } // Liste für alle bereits gekauften Items
-    public IOffer? LastVendorOffer { get; set; } //Letzte Offer an den Customer von dem Vendor (nullable weil Vendor noch keine Offer gemacht haben könnte)
-    public IOffer? LastCustomerOffer { get; set; } // Letzte Offer vom Customer (nullable weil Kunde noch keine Offer gemacht haben könnte)
+    private decimal Budget { get; set; }                                   // Budget des Kunden
+    private List<IProduct> Likes { get; set; } = new();                    // Produkte, die der Kunde mag
+    private List<IProduct> Dislikes { get; set; } = new();                 // Produkte, die der Kunde nicht mag
+    private List<IProduct>? MustHaves { get; set; } = new();               // Produkte, die der Kunde unbedingt will
+    private Percentage Elasticity { get; set; } = 50;                      // Preisempfindlichkeit (0–100)
+    private List<IProduct> Inventory { get; set; } = new();                // Bereits gekaufte Items
+    private IOffer? LastVendorOffer { get; set; }                          // letztes Angebot des Vendors
+    private IOffer? LastCustomerOffer { get; set; }                        // letztes Gegenangebot des Customers
+
+    private const decimal MustHaveAcceptThreshold = 0.80m;                 // 80% des Budgets
+    private const decimal LikeAcceptThreshold     = 0.70m;                 // 70% des Budgets
+    private const int     LowPatienceThreshold    = 30;                    // <30% Geduld → eher Abbruch
+    private const decimal MinCounterPrice         = 0.01m;                 // Gegenangebote min. 1 Cent
 
     public void AcceptTrade(IOffer offer)
     {
         if (offer == null)
-        throw new ArgumentNullException(nameof(offer));
+            throw new ArgumentNullException(nameof(offer));
 
         if (Budget < offer.Price)
         {
@@ -29,8 +34,9 @@ public class Customer : ICustomer
         Inventory.Add(offer.Product);
         Budget -= offer.Price;
 
+        LastVendorOffer = offer;
         LastCustomerOffer = offer;
-        LastVendorOffer = null;
+
         Patience = 100;
 
         Console.WriteLine($"{Name} akzeptiert den Handel: {offer.Product.Name} für {offer.Price}.");
@@ -38,6 +44,8 @@ public class Customer : ICustomer
 
     public IProduct ChooseProduct(IVendor vendor)
     {
+        if (vendor == null) throw new ArgumentNullException(nameof(vendor));
+
         var product = DecideOnProduct(vendor);
         if (product != null)
         {
@@ -49,38 +57,41 @@ public class Customer : ICustomer
         }
     }
 
-
     public IOffer RespondToOffer(IOffer offer, IVendor vendor)
     {
         if (offer == null)
-        {
             throw new ArgumentNullException(nameof(offer));
-        }
+        if (vendor == null)
+            throw new ArgumentNullException(nameof(vendor));
 
-        decimal priceChange = LastVendorOffer != null ? Math.Abs(offer.Price - LastVendorOffer.Price) : offer.Price;
-        int patienceReduction = priceChange < 0.01m * (LastVendorOffer?.Price ?? offer.Price) ? Random.Shared.Next(5,25) : Random.Shared.Next(0,12);
-        Patience = Math.Max(0, Patience - patienceReduction);
+        UpdatePatience(offer);
 
         LastVendorOffer = offer;
 
         var decision = EvaluateOfferDecision(offer);
+
         switch (decision)
         {
             case OfferDecision.Accept:
+                offer.Status = OfferStatus.Accepted;
                 AcceptTrade(offer);
                 return offer;
+
             case OfferDecision.Decline:
+                offer.Status = OfferStatus.Stopped;
                 StopTrade();
-                return null;
+                return offer;
+
             case OfferDecision.Counter:
                 var counterOffer = CreateOffer(offer.Product);
                 LastCustomerOffer = counterOffer;
                 return counterOffer;
+
             default:
-                StopTrade();
-                return null;
+                throw new InvalidOperationException("Unbekannte Angebotsentscheidung.");
         }
     }
+
     private enum OfferDecision { Accept, Decline, Counter }
 
     private OfferDecision EvaluateOfferDecision(IOffer offer)
@@ -90,25 +101,28 @@ public class Customer : ICustomer
             return OfferDecision.Decline;
         }
 
-        bool likesProduct = Likes.Any(l => l.Name == offer.Product.Name);
-        bool mustHaveProduct = Musthaves != null && Musthaves.Any(m => m.Name == offer.Product.Name);
-        bool dislikesProduct = Dislikes.Any(d => d.Name == offer.Product.Name);
+        static bool SameName(string a, string b) =>
+            string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+        bool likesProduct     = Likes.Any(l => SameName(l.Name, offer.Product.Name));
+        bool mustHaveProduct  = MustHaves != null && MustHaves.Any(m => SameName(m.Name, offer.Product.Name));
+        bool dislikesProduct  = Dislikes.Any(d => SameName(d.Name, offer.Product.Name));
 
         if (mustHaveProduct && Budget >= offer.Price)
         {
-            if (offer.Price <= Budget * 0.8m)
+            if (offer.Price <= Budget * MustHaveAcceptThreshold)
                 return OfferDecision.Accept;
             else
                 return OfferDecision.Counter;
         }
 
-        if (likesProduct && offer.Price <= Budget * 0.7m)
+        if (likesProduct && offer.Price <= Budget * LikeAcceptThreshold)
             return OfferDecision.Accept;
 
         if (likesProduct && Budget >= offer.Price)
             return OfferDecision.Counter;
 
-        if (dislikesProduct || offer.Price > Budget || Patience < 30)
+        if (dislikesProduct || offer.Price > Budget || Patience < LowPatienceThreshold)
             return OfferDecision.Decline;
 
         return OfferDecision.Counter;
@@ -125,75 +139,102 @@ public class Customer : ICustomer
 
     private IProduct? DecideOnProduct(IVendor vendor)
     {
+        if (vendor.Products == null) return null;
+
+        static bool SameName(string a, string b) =>
+            string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
         var availableProducts = vendor.Products
-            .Where(p => !Inventory.Any(i => i.Name == p.Name))
+            .Where(p => !Inventory.Any(i => SameName(i.Name, p.Name)))
             .ToList();
 
         var mustHave = availableProducts
-            .FirstOrDefault(p => Musthaves != null && Musthaves.Any(m => m.Name == p.Name));
+            .FirstOrDefault(p => MustHaves != null && MustHaves.Any(m => SameName(m.Name, p.Name)));
         if (mustHave != null)
         {
             LastVendorOffer = vendor.GetStartingOffer(mustHave, this);
             return mustHave;
         }
 
-
         var liked = availableProducts
-            .FirstOrDefault(p => Likes.Any(l => l.Name == p.Name));
+            .FirstOrDefault(p => Likes.Any(l => SameName(l.Name, p.Name)));
         if (liked != null)
         {
             LastVendorOffer = vendor.GetStartingOffer(liked, this);
             return liked;
         }
 
-    
         var neutral = availableProducts
-            .Where(p => !Likes.Any(l => l.Name == p.Name) &&
-                        !Dislikes.Any(d => d.Name == p.Name))
+            .Where(p => !Likes.Any(l => SameName(l.Name, p.Name)) &&
+                        !Dislikes.Any(d => SameName(d.Name, p.Name)))
             .FirstOrDefault();
         if (neutral != null)
         {
             LastVendorOffer = vendor.GetStartingOffer(neutral, this);
             return neutral;
         }
-        
+
         return null;
     }
 
-
-      private IOffer CreateOffer(IProduct product)
-{
-    if (LastVendorOffer == null)
-        throw new InvalidOperationException("Vendor must make the first offer.");
-
-    IOffer newOffer = new CustomerOffer ();
-
-    // First customer offer: depends on rarity
-    if (LastCustomerOffer == null)
+    private IOffer CreateOffer(IProduct product)
     {
-        double rarityWeight = product.Rarity.Value / 100.0; // 0.0 (common) → 1.0 (very rare)
-        double startRatio = 0.3 + 0.5 * rarityWeight;       // 30%–80% of vendor price
+        if (product == null)
+            throw new ArgumentNullException(nameof(product));
+        if (LastVendorOffer == null)
+            throw new InvalidOperationException("Vendor must make the first offer.");
 
-        double initialPrice = (double) LastVendorOffer.Price * startRatio;
+        IOffer newOffer = new CustomerOffer
+        {
+            Product = product,
+            OfferedBy = PersonType.Customer,
+            Status = OfferStatus.Ongoing
+        };
 
-        // Cap at budget
-        newOffer.Price = Math.Min((decimal)initialPrice, Budget);
+        if (LastCustomerOffer == null)
+        {
+            double rarityWeight = Math.Clamp(product.Rarity.Value / 100.0, 0.0, 1.0);
+            double startRatio = 0.3 + 0.5 * rarityWeight;
+            double initialPrice = (double)LastVendorOffer.Price * startRatio;
+
+            var price = Math.Min((decimal)initialPrice, Budget);
+            newOffer.Price = price >= MinCounterPrice ? price : MinCounterPrice;
+            return newOffer;
+        }
+
+        double baseConcession = 0.2; 
+        double elasticityBump = Math.Min((int)Elasticity, 100) / 1000.0; 
+        double concessionRate = Math.Clamp(baseConcession + elasticityBump, 0.05, 0.6);
+
+        double nextPrice = (double)LastCustomerOffer.Price +
+                           ((double)LastVendorOffer.Price - (double)LastCustomerOffer.Price) * concessionRate;
+
+        var capped = Math.Min((decimal)nextPrice, Budget);
+        newOffer.Price = capped >= MinCounterPrice ? capped : MinCounterPrice;
+
         return newOffer;
     }
 
-    // Otherwise: move closer to vendor’s offer
-    double concessionRate = 0.2; // could later depend on patience/elasticity
-    double nextPrice = (double) LastCustomerOffer.Price +
-                      ( (double) LastVendorOffer.Price -  (double) LastCustomerOffer.Price) * concessionRate;
+    private void UpdatePatience(IOffer newVendorOffer)
+    {
+        if (LastVendorOffer == null)
+        {
+            int initDrop = Random.Shared.Next(0, 6);
+            Patience = Math.Clamp((int)Patience - initDrop, 0, 100);
+            return;
+        }
 
-    // Cap at budget
-    newOffer.Price = Math.Min((decimal)nextPrice, Budget);
+        var prev = LastVendorOffer.Price;
+        var delta = Math.Abs(newVendorOffer.Price - prev);
+        var pct = prev > 0 ? (double)(delta / prev) : 1.0;
 
-    return newOffer;
+        int baseReduction = pct < 0.01
+            ? Random.Shared.Next(0, 12)   
+            : Random.Shared.Next(5, 25);  
+
+        double elasticityMultiplier = 1.0 + Math.Min((int)Elasticity, 100) / 200.0; 
+        int patienceReduction = (int)Math.Round(baseReduction * elasticityMultiplier);
+
+        Patience = Math.Clamp((int)Patience - patienceReduction, 0, 100);
+    }
 }
-
-
-
-}
-
