@@ -6,7 +6,7 @@ public class Customer : ICustomer
     public int Age { get; init; }
     public Percentage Patience { get; set; }
 
-    public double Budget { get; set; } //Idk ob mit DezimalZahlen gehandelt wird aber zur Sicherheit
+    public decimal Budget { get; set; } //Idk ob mit DezimalZahlen gehandelt wird aber zur Sicherheit
     public List<IProduct> Likes { get; set; } //Liste der Produkte die der Kunde mag
     public List<IProduct> Dislikes { get; set; } //Liste der Produkte die der Kunde nicht mag
     public List<IProduct>? Musthaves { get; set; } //Liste der Produkte die der Kunde unbedigt besitzen will
@@ -36,12 +36,18 @@ public class Customer : ICustomer
         Console.WriteLine($"{Name} akzeptiert den Handel: {offer.Product.Name} für {offer.Price}.");
     }
 
-   public IOffer ChooseProduct(IVendor vendor)
-   {
-       var product = DecideOnProduct(vendor);
-       var myOffer = CreateOffer(product);
-        return myOffer;
-   }
+    public IProduct ChooseProduct(IVendor vendor)
+    {
+        var product = DecideOnProduct(vendor);
+        if (product != null)
+        {
+            return product;
+        }
+        else
+        {
+            throw new InvalidOperationException($"{Name} findet kein Produkt, das gekauft werden kann.");
+        }
+    }
 
 
     public IOffer RespondToOffer(IOffer offer, IVendor vendor)
@@ -113,7 +119,7 @@ public class Customer : ICustomer
         double initialPrice = (double) LastVendorOffer.Price * startRatio;
 
         // Cap at budget
-        newOffer.Price = (decimal) Math.Min(initialPrice, Budget);
+        newOffer.Price = Math.Min((decimal)initialPrice, Budget);
         return newOffer;
     }
 
@@ -123,7 +129,7 @@ public class Customer : ICustomer
                       ( (double) LastVendorOffer.Price -  (double) LastCustomerOffer.Price) * concessionRate;
 
     // Cap at budget
-    newOffer.Price = (decimal) Math.Min(nextPrice, Budget);
+    newOffer.Price = Math.Min((decimal)nextPrice, Budget);
 
     return newOffer;
 }
