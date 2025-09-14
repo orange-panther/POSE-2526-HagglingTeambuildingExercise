@@ -38,16 +38,32 @@ public class Customer : ICustomer
         throw new NotImplementedException();
     }
 
-  private IProduct DecideOnProduct(IVendor vendor)
-      {
+    private IProduct DecideOnProduct(IVendor vendor)
+    {
+   
+        var availableProducts = vendor.Products
+            .Where(p => !Inventory.Any(i => i.Name == p.Name))
+            .ToList();
 
-          var preferred = vendor.Products.FirstOrDefault(p => Likes.Any(l => l.Name == p.Name));
-          var fallback = vendor.Products.OrderByDescending(p => p.Rarity.Value).First();
-          var chosen = preferred ?? fallback;
-          LastVendorOffer = vendor.GetStartingOffer(chosen, this);
 
-          return chosen;
-      }
+        var preferred = availableProducts
+            .FirstOrDefault(p => Likes.Any(l => l.Name == p.Name));
+
+        
+        var fallback = availableProducts
+            .OrderByDescending(p => p.Rarity.Value)
+            .FirstOrDefault();
+
+        var chosen = preferred ?? fallback;
+
+        if (chosen != null)
+        {
+            LastVendorOffer = vendor.GetStartingOffer(chosen, this);
+        }
+
+        return chosen;
+    }
+
 
 }
 
