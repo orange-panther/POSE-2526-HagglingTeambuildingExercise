@@ -6,19 +6,19 @@ public class Customer : ICustomer
     public int Age { get; init; }
     public Percentage Patience { get; set; } = 100;
 
-    private decimal Budget { get; set; }                                   // Budget des Kunden
-    private List<IProduct> Likes { get; set; } = new();                    // Produkte, die der Kunde mag
-    private List<IProduct> Dislikes { get; set; } = new();                 // Produkte, die der Kunde nicht mag
-    private List<IProduct>? MustHaves { get; set; } = new();               // Produkte, die der Kunde unbedingt will
-    private Percentage Elasticity { get; set; } = 50;                      // Preisempfindlichkeit (0–100)
-    private List<IProduct> Inventory { get; set; } = new();                // Bereits gekaufte Items
-    private IOffer? LastVendorOffer { get; set; }                          // letztes Angebot des Vendors
-    private IOffer? LastCustomerOffer { get; set; }                        // letztes Gegenangebot des Customers
+    protected decimal Budget { get; set; }                                   // Budget des Kunden
+    protected List<IProduct> Likes { get; set; } = new();                    // Produkte, die der Kunde mag
+    protected List<IProduct> Dislikes { get; set; } = new();                 // Produkte, die der Kunde nicht mag
+    protected List<IProduct>? MustHaves { get; set; } = new();               // Produkte, die der Kunde unbedingt will
+    protected Percentage Elasticity { get; set; } = 50;                      // Preisempfindlichkeit (0–100)
+    protected List<IProduct> Inventory { get; set; } = new();                // Bereits gekaufte Items
+    protected IOffer? LastVendorOffer { get; set; }                          // letztes Angebot des Vendors
+    protected IOffer? LastCustomerOffer { get; set; }                        // letztes Gegenangebot des Customers
 
-    private const decimal MustHaveAcceptThreshold = 0.80m;                 // 80% des Budgets
-    private const decimal LikeAcceptThreshold     = 0.70m;                 // 70% des Budgets
-    private const int     LowPatienceThreshold    = 30;                    // <30% Geduld → eher Abbruch
-    private const decimal MinCounterPrice         = 0.01m;                 // Gegenangebote min. 1 Cent
+    protected const decimal MustHaveAcceptThreshold = 0.80m;                 // 80% des Budgets
+    protected const decimal LikeAcceptThreshold     = 0.70m;                 // 70% des Budgets
+    protected const int     LowPatienceThreshold    = 30;                    // <30% Geduld → eher Abbruch
+    protected const decimal MinCounterPrice         = 0.01m;                 // Gegenangebote min. 1 Cent
 
     public void AcceptTrade(IOffer offer)
     {
@@ -92,9 +92,9 @@ public class Customer : ICustomer
         }
     }
 
-    private enum OfferDecision { Accept, Decline, Counter }
+    protected enum OfferDecision { Accept, Decline, Counter }
 
-    private OfferDecision EvaluateOfferDecision(IOffer offer)
+    protected virtual OfferDecision EvaluateOfferDecision(IOffer offer)
     {
         if (Patience == 0)
         {
@@ -137,7 +137,7 @@ public class Customer : ICustomer
         Console.WriteLine($"{Name} hat die Verhandlung abgebrochen.");
     }
 
-    private IProduct? DecideOnProduct(IVendor vendor)
+    protected virtual IProduct? DecideOnProduct(IVendor vendor)
     {
         if (vendor.Products == null) return null;
 
@@ -177,7 +177,7 @@ public class Customer : ICustomer
         return null;
     }
 
-    private IOffer CreateOffer(IProduct product)
+    protected virtual IOffer CreateOffer(IProduct product)
     {
         if (product == null)
             throw new ArgumentNullException(nameof(product));
@@ -215,7 +215,7 @@ public class Customer : ICustomer
         return newOffer;
     }
 
-    private void UpdatePatience(IOffer newVendorOffer)
+    protected virtual void UpdatePatience(IOffer newVendorOffer)
     {
         if (LastVendorOffer == null)
         {
