@@ -17,7 +17,23 @@ public class Customer : ICustomer
 
     public void AcceptTrade(IOffer offer)
     {
-        throw new NotImplementedException();
+        if (offer == null)
+        throw new ArgumentNullException(nameof(offer));
+
+        if (Budget < offer.Price)
+        {
+            Console.WriteLine($"{Name} kann das Angebot nicht akzeptieren – Budget zu klein.");
+            return;
+        }
+
+        Inventory.Add(offer.Product);
+        Budget -= offer.Price;
+
+        LastCustomerOffer = offer;
+        LastVendorOffer = null;
+        Patience = 100;
+
+        Console.WriteLine($"{Name} akzeptiert den Handel: {offer.Product.Name} für {offer.Price}.");
     }
 
    public IOffer ChooseProduct(IVendor vendor)
@@ -35,7 +51,11 @@ public class Customer : ICustomer
 
     public void StopTrade()
     {
-        throw new NotImplementedException();
+        LastVendorOffer = null;
+        LastCustomerOffer = null;
+        Patience = 100;
+
+        Console.WriteLine($"{Name} hat die Verhandlung abgebrochen.");
     }
 
     private IProduct? DecideOnProduct(IVendor vendor)
