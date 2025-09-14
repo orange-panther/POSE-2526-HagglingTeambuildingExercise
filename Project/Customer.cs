@@ -20,10 +20,13 @@ public class Customer : ICustomer
         throw new NotImplementedException();
     }
 
-    public IProduct ChooseProduct(IVendor vendor)
-    {
-        throw new NotImplementedException();
-    }
+   public IOffer ChooseProduct(IVendor vendor)
+   {
+       var product = DecideOnProduct(vendor);
+       var myOffer = CreateOffer();  
+       return myOffer;
+   }
+
 
     public IOffer RespondToOffer(IOffer offer, IVendor vendor)
     {
@@ -34,5 +37,17 @@ public class Customer : ICustomer
     {
         throw new NotImplementedException();
     }
+
+  private IProduct DecideOnProduct(IVendor vendor)
+      {
+
+          var preferred = vendor.Products.FirstOrDefault(p => Likes.Any(l => l.Name == p.Name));
+          var fallback = vendor.Products.OrderByDescending(p => p.Rarity.Value).First();
+          var chosen = preferred ?? fallback;
+          LastVendorOffer = vendor.GetStartingOffer(chosen, this);
+
+          return chosen;
+      }
+
 }
 
