@@ -9,7 +9,7 @@ public class Customer : ICustomer
     public double Budget { get; set; } //Idk ob mit DezimalZahlen gehandelt wird aber zur Sicherheit
     public List<IProduct> Likes { get; set; } //Liste der Produkte die der Kunde mag
     public List<IProduct> Dislikes { get; set; } //Liste der Produkte die der Kunde nicht mag
-    public List<IProduct>? Musthaves { get; set; } //Liste der Produkte die der Kunde besitzt
+    public List<IProduct>? Musthaves { get; set; } //Liste der Produkte die der Kunde unbedigt besitzen will
     public Percentage Elasticity { get; set; } //Wie stark der Kunde auf Preisänderungen reagiert
     public List<IProduct> Inventory { get; set; } // Liste für alle bereits gekauften Items
     public IOffer? LastVendorOffer { get; set; } //Letzte Offer an den Customer von dem Vendor (nullable weil Vendor noch keine Offer gemacht haben könnte)
@@ -23,8 +23,8 @@ public class Customer : ICustomer
    public IOffer ChooseProduct(IVendor vendor)
    {
        var product = DecideOnProduct(vendor);
-       //var myOffer = CreateOffer();  
-       //return myOffer;
+       var myOffer = CreateOffer(product);
+        return myOffer;
    }
 
 
@@ -75,6 +75,39 @@ public class Customer : ICustomer
         
         return null;
     }
+
+
+      private IOffer CreateOffer(IProduct product)
+{
+    if (LastVendorOffer == null)
+        throw new InvalidOperationException("Vendor must make the first offer.");
+
+    IOffer newOffer = new CustomerOffer ();
+
+    // First customer offer: depends on rarity
+    if (LastCustomerOffer == null)
+    {
+        double rarityWeight = product.Rarity.Value / 100.0; // 0.0 (common) → 1.0 (very rare)
+        double startRatio = 0.3 + 0.5 * rarityWeight;       // 30%–80% of vendor price
+
+        double initialPrice = (double) LastVendorOffer.Price * startRatio;
+
+        // Cap at budget
+        newOffer.Price = (decimal) Math.Min(initialPrice, Budget);
+        return newOffer;
+    }
+
+    // Otherwise: move closer to vendor’s offer
+    double concessionRate = 0.2; // could later depend on patience/elasticity
+    double nextPrice = (double) LastCustomerOffer.Price +
+                      ( (double) LastVendorOffer.Price -  (double) LastCustomerOffer.Price) * concessionRate;
+
+    // Cap at budget
+    newOffer.Price = (decimal) Math.Min(nextPrice, Budget);
+
+    return newOffer;
+}
+
 
 
 }
