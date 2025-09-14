@@ -52,7 +52,66 @@ public class Customer : ICustomer
 
     public IOffer RespondToOffer(IOffer offer, IVendor vendor)
     {
-        throw new NotImplementedException();
+        if (offer == null)
+        {
+            throw new ArgumentNullException(nameof(offer));
+        }
+
+        decimal priceChange = LastVendorOffer != null ? Math.Abs(offer.Price - LastVendorOffer.Price) : offer.Price;
+        int patienceReduction = priceChange < 0.01m * (LastVendorOffer?.Price ?? offer.Price) ? Random.Shared.Next(5,25) : Random.Shared.Next(0,12);
+        Patience = Math.Max(0, Patience - patienceReduction);
+
+        LastVendorOffer = offer;
+
+        var decision = EvaluateOfferDecision(offer);
+        switch (decision)
+        {
+            case OfferDecision.Accept:
+                AcceptTrade(offer);
+                return offer;
+            case OfferDecision.Decline:
+                StopTrade();
+                return null;
+            case OfferDecision.Counter:
+                var counterOffer = CreateOffer(offer.Product);
+                LastCustomerOffer = counterOffer;
+                return counterOffer;
+            default:
+                StopTrade();
+                return null;
+        }
+    }
+    private enum OfferDecision { Accept, Decline, Counter }
+
+    private OfferDecision EvaluateOfferDecision(IOffer offer)
+    {
+        if (Patience == 0)
+        {
+            return OfferDecision.Decline;
+        }
+
+        bool likesProduct = Likes.Any(l => l.Name == offer.Product.Name);
+        bool mustHaveProduct = Musthaves != null && Musthaves.Any(m => m.Name == offer.Product.Name);
+        bool dislikesProduct = Dislikes.Any(d => d.Name == offer.Product.Name);
+
+        if (mustHaveProduct && Budget >= offer.Price)
+        {
+            if (offer.Price <= Budget * 0.8m)
+                return OfferDecision.Accept;
+            else
+                return OfferDecision.Counter;
+        }
+
+        if (likesProduct && offer.Price <= Budget * 0.7m)
+            return OfferDecision.Accept;
+
+        if (likesProduct && Budget >= offer.Price)
+            return OfferDecision.Counter;
+
+        if (dislikesProduct || offer.Price > Budget || Patience < 30)
+            return OfferDecision.Decline;
+
+        return OfferDecision.Counter;
     }
 
     public void StopTrade()
