@@ -59,3 +59,8 @@ public interface ICustomer
     /// </summary>
     public void StopTrade();
 }
+
+public interface ICustomerFactory
+{
+    public static abstract ICustomer CreateCustomer(string name, int age);
+}
