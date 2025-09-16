@@ -238,3 +238,15 @@ public class Customer : ICustomer
         Patience = Math.Clamp((int)Patience - patienceReduction, 0, 100);
     }
 }
+
+public class CustomerFactory : ICustomerFactory
+{
+    public static ICustomer CreateCustomer(string name, int age)
+    {
+        return new Customer
+        {
+            Name = name,
+            Age = age
+        };
+    }
+}
