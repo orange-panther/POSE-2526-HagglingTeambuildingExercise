@@ -9,7 +9,7 @@
     <OutputType>Library</OutputType>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>Haggling.Project</AssemblyName>
+    <AssemblyName>haggling_customer</AssemblyName>
   </PropertyGroup>
 
 </Project>

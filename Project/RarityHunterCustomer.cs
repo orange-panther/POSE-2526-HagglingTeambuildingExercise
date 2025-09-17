@@ -4,30 +4,51 @@ public class RarityHunterCustomer : Customer
 {
     protected override IProduct? DecideOnProduct(IVendor vendor)
     {
-        var all = vendor.Products?
+        if (vendor.Products == null) return null;
+
+        var pool = vendor.Products
             .Where(p => Inventory.All(i => i.Type != p.Type))
-            .ToList() ?? new();
+            .Where(p => !Dislikes.Contains(p.Type))
+            .ToList();
+        if (pool.Count == 0) return null;
 
-        if (all.Count == 0) return null;
+        IProduct? PickAffordable(IEnumerable<IProduct> seq)
+        {
+            foreach (var p in seq)
+            {
+                var start = vendor.GetStartingOffer(p, this);
+                if (start.Price <= Budget)
+                {
+                    LastVendorOffer = start;
+                    return p;
+                }
+            }
+            return null;
+        }
 
-        var mh = all
+        var must = pool
             .Where(p => MustHaves != null && MustHaves.Contains(p.Type))
-            .OrderByDescending(p => p.Rarity.Value)
-            .FirstOrDefault();
-        if (mh != null) return mh;
+            .OrderByDescending(p => p.Rarity.Value);
 
-        var liked = all
+        var liked = pool
             .Where(p => Likes.Contains(p.Type))
-            .OrderByDescending(p => p.Rarity.Value)
-            .FirstOrDefault();
-        if (liked != null) return liked;
+            .OrderByDescending(p => p.Rarity.Value);
 
-        var neutral = all
-            .Where(p => !Likes.Contains(p.Type) && !Dislikes.Contains(p.Type))
-            .OrderByDescending(p => p.Rarity.Value)
-            .FirstOrDefault();
+        var neutral = pool
+            .Where(p => !Likes.Contains(p.Type) && (MustHaves == null || !MustHaves.Contains(p.Type)))
+            .OrderByDescending(p => p.Rarity.Value);
 
-        return neutral ?? all.FirstOrDefault();
+        var chosen = PickAffordable(must)
+                  ?? PickAffordable(liked)
+                  ?? PickAffordable(neutral);
+
+        if (chosen == null)
+        {
+            StopTrade();
+            return null;
+        }
+
+        return chosen;
     }
 
     protected override OfferDecision EvaluateOfferDecision(IOffer offer)
@@ -35,18 +56,14 @@ public class RarityHunterCustomer : Customer
         var baseDecision = base.EvaluateOfferDecision(offer);
         if (Patience == 0) return OfferDecision.Decline;
 
-        var r = offer.Product.Rarity.Value; // 0..100
+        var rarity = offer.Product.Rarity.Value; 
+        bool must  = (MustHaves ?? new()).Contains(offer.Product.Type);
+        bool like  = Likes.Contains(offer.Product.Type);
 
-        if (baseDecision == OfferDecision.Counter && r >= 80)
+        if (baseDecision == OfferDecision.Counter && rarity >= 90)
         {
-            var mustHave = (MustHaves ?? new()).Contains(offer.Product.Type);
-            var liked    = Likes.Contains(offer.Product.Type);
-
-            if (mustHave && offer.Price <= Budget * (MustHaveAcceptThreshold + 0.10m))
-                return OfferDecision.Accept;
-
-            if (liked && offer.Price <= Budget * (LikeAcceptThreshold + 0.10m))
-                return OfferDecision.Accept;
+            if (must && offer.Price <= Budget * 0.95m) return OfferDecision.Accept;
+            if (like && offer.Price <= Budget * 0.90m) return OfferDecision.Accept;
         }
 
         return baseDecision;
@@ -56,18 +73,24 @@ public class RarityHunterCustomer : Customer
     {
         var offer = base.CreateOffer(product);
 
-        if (LastVendorOffer != null && LastCustomerOffer != null)
-        {
-            var rarity = Math.Clamp(product.Rarity.Value / 100.0, 0.0, 1.0); // 0..1
-            var extraConcession = 0.05 * rarity; 
+        if (LastVendorOffer == null) return offer;
 
-            var target = (double)LastCustomerOffer.Price +
-                        ((double)LastVendorOffer.Price - (double)LastCustomerOffer.Price) * extraConcession;
+        var r = Math.Clamp(product.Rarity.Value, 0, 100);
+        decimal cushionPct = 0.05m + ((50 - r) / 100m) * 0.10m; 
+        if (cushionPct < 0m)  cushionPct = 0m;
+        if (cushionPct > 0.10m) cushionPct = 0.10m;
 
-            var boosted = Math.Min((decimal)target + offer.Price - LastCustomerOffer.Price, Budget);
-            offer.Price = boosted >= MinCounterPrice ? boosted : MinCounterPrice;
-        }
+        decimal vendor = LastVendorOffer.Price;
+        decimal cap    = R2(vendor * (1m - cushionPct)); 
 
+        decimal price = offer.Price;
+        if (price > cap) price = cap;
+
+        decimal minOffer = MinMeaningfulOfferFor(vendor);
+        if (price < minOffer) price = minOffer;
+        if (price > Budget)   price = Budget;
+
+        offer.Price = R2(price);
         return offer;
     }
 }
