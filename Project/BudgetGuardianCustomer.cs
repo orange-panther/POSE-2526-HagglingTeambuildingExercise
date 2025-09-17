@@ -2,19 +2,21 @@ namespace haggling_interfaces;
 
 public class BudgetGuardianCustomer : Customer
 {
+
+    private int StubbornRounds { get; set; } = Random.Shared.Next(3, 6);
+
     protected override OfferDecision EvaluateOfferDecision(IOffer offer)
     {
         if (Patience == 0) return OfferDecision.Decline;
 
-        static bool Same(string a, string b) =>
-            string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        bool likes    = Likes.Contains(offer.Product.Type);
+        bool mustHave = MustHaves != null && MustHaves.Contains(offer.Product.Type);
+        bool dislikes = Dislikes.Contains(offer.Product.Type);
 
-        bool likes     = Likes.Any(l => Same(l.Name, offer.Product.Name));
-        bool mustHave  = (MustHaves ?? new()).Any(m => Same(m.Name, offer.Product.Name));
-        bool dislikes  = Dislikes.Any(d => Same(d.Name, offer.Product.Name));
+        const decimal MustHaveTight = MustHaveAcceptThreshold - 0.10m; // 70%
+        const decimal LikeTight     = LikeAcceptThreshold     - 0.10m; // 60%
 
-        const decimal MustHaveTight = MustHaveAcceptThreshold - 0.10m;
-        const decimal LikeTight     = LikeAcceptThreshold     - 0.10m;
+        StubbornRounds = Math.Max(0, StubbornRounds - 1);
 
         if (mustHave && Budget >= offer.Price)
             return offer.Price <= Budget * MustHaveTight ? OfferDecision.Accept : OfferDecision.Counter;
@@ -22,13 +24,10 @@ public class BudgetGuardianCustomer : Customer
         if (likes && offer.Price <= Budget * LikeTight)
             return OfferDecision.Accept;
 
-        if (offer.Price > Budget * 0.90m)
-            return OfferDecision.Decline;
-
         if (likes && Budget >= offer.Price)
             return OfferDecision.Counter;
 
-        if (dislikes || offer.Price > Budget || Patience < LowPatienceThreshold)
+        if (StubbornRounds <= 0 && (offer.Price > Budget * 0.90m || dislikes) || Patience < LowPatienceThreshold)
             return OfferDecision.Decline;
 
         return OfferDecision.Counter;
@@ -47,11 +46,10 @@ public class BudgetGuardianCustomer : Customer
 
         if (LastVendorOffer != null && LastCustomerOffer != null)
         {
-            double extraConcessionDown = 0.07; 
+            double extraConcessionDown = 0.07;
             double step = ((double)LastVendorOffer.Price - (double)LastCustomerOffer.Price) * extraConcessionDown;
 
-            var next = (decimal)((double)offer.Price - step); 
-            
+            var next = (decimal)((double)offer.Price - step);
             next = Math.Min(next, Budget);
             offer.Price = next >= MinCounterPrice ? next : MinCounterPrice;
         }
@@ -61,11 +59,9 @@ public class BudgetGuardianCustomer : Customer
 
     protected override void UpdatePatience(IOffer newVendorOffer)
     {
-        // Budgettreu: reagiert gelassener auf Preisänderungen
         base.UpdatePatience(newVendorOffer);
-        // Reduziere den Abzug leicht um 20% (Clamp inkl.)
-        // (Patience ist Percentage -> implizit int)
-        int recover = (int)Math.Round((100 - (int)Patience) * 0.20); // kleiner „Rückfedern“-Effekt
+
+        int recover = (int)Math.Round((100 - (int)Patience) * 0.20);
         Patience = Math.Clamp((int)Patience + recover, 0, 100);
     }
 }

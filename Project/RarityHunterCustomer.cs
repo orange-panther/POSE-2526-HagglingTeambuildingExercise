@@ -4,33 +4,29 @@ public class RarityHunterCustomer : Customer
 {
     protected override IProduct? DecideOnProduct(IVendor vendor)
     {
-        static bool Same(string a, string b) =>
-            string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
-
         var all = vendor.Products?
-            .Where(p => Inventory.All(i => !Same(i.Name, p.Name)))
+            .Where(p => Inventory.All(i => i.Type != p.Type))
             .ToList() ?? new();
 
         if (all.Count == 0) return null;
 
-        var mh = (MustHaves ?? new())
-            .Select(m => all.FirstOrDefault(p => Same(p.Name, m.Name)))
-            .Where(p => p != null)
-            .OrderByDescending(p => p!.Rarity.Value)
+        var mh = all
+            .Where(p => MustHaves != null && MustHaves.Contains(p.Type))
+            .OrderByDescending(p => p.Rarity.Value)
             .FirstOrDefault();
         if (mh != null) return mh;
 
         var liked = all
-            .Where(p => Likes.Any(l => Same(l.Name, p.Name)))
+            .Where(p => Likes.Contains(p.Type))
             .OrderByDescending(p => p.Rarity.Value)
             .FirstOrDefault();
         if (liked != null) return liked;
 
         var neutral = all
-            .Where(p => !Likes.Any(l => Same(l.Name, p.Name)) &&
-                        !Dislikes.Any(d => Same(d.Name, p.Name)))
+            .Where(p => !Likes.Contains(p.Type) && !Dislikes.Contains(p.Type))
             .OrderByDescending(p => p.Rarity.Value)
             .FirstOrDefault();
+
         return neutral ?? all.FirstOrDefault();
     }
 
@@ -43,10 +39,8 @@ public class RarityHunterCustomer : Customer
 
         if (baseDecision == OfferDecision.Counter && r >= 80)
         {
-            var mustHave = (MustHaves ?? new()).Any(m => 
-                string.Equals(m.Name, offer.Product.Name, StringComparison.OrdinalIgnoreCase));
-            var liked = Likes.Any(l => 
-                string.Equals(l.Name, offer.Product.Name, StringComparison.OrdinalIgnoreCase));
+            var mustHave = (MustHaves ?? new()).Contains(offer.Product.Type);
+            var liked    = Likes.Contains(offer.Product.Type);
 
             if (mustHave && offer.Price <= Budget * (MustHaveAcceptThreshold + 0.10m))
                 return OfferDecision.Accept;
@@ -65,7 +59,7 @@ public class RarityHunterCustomer : Customer
         if (LastVendorOffer != null && LastCustomerOffer != null)
         {
             var rarity = Math.Clamp(product.Rarity.Value / 100.0, 0.0, 1.0); // 0..1
-            var extraConcession = 0.05 * rarity; // bis +5 pp
+            var extraConcession = 0.05 * rarity; 
 
             var target = (double)LastCustomerOffer.Price +
                         ((double)LastVendorOffer.Price - (double)LastCustomerOffer.Price) * extraConcession;

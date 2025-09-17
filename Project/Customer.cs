@@ -1,5 +1,6 @@
 ﻿namespace haggling_interfaces;
 
+using System.Reflection;
 public class Customer : ICustomer
 {
     public string Name { get; init; } = string.Empty;
@@ -7,18 +8,18 @@ public class Customer : ICustomer
     public Percentage Patience { get; set; } = 100;
 
     protected decimal Budget { get; set; }                                   // Budget des Kunden
-    protected List<IProduct> Likes { get; set; } = new();                    // Produkte, die der Kunde mag
-    protected List<IProduct> Dislikes { get; set; } = new();                 // Produkte, die der Kunde nicht mag
-    protected List<IProduct>? MustHaves { get; set; } = new();               // Produkte, die der Kunde unbedingt will
+    protected List<ProductType> Likes { get; set; } = new();                    // Produkte, die der Kunde mag
+    protected List<ProductType> Dislikes { get; set; } = new();                 // Produkte, die der Kunde nicht mag
+    protected List<ProductType>? MustHaves { get; set; } = new();               // Produkte, die der Kunde unbedingt will
     protected Percentage Elasticity { get; set; } = 50;                      // Preisempfindlichkeit (0–100)
     protected List<IProduct> Inventory { get; set; } = new();                // Bereits gekaufte Items
     protected IOffer? LastVendorOffer { get; set; }                          // letztes Angebot des Vendors
     protected IOffer? LastCustomerOffer { get; set; }                        // letztes Gegenangebot des Customers
 
     protected const decimal MustHaveAcceptThreshold = 0.80m;                 // 80% des Budgets
-    protected const decimal LikeAcceptThreshold     = 0.70m;                 // 70% des Budgets
-    protected const int     LowPatienceThreshold    = 30;                    // <30% Geduld → eher Abbruch
-    protected const decimal MinCounterPrice         = 0.01m;                 // Gegenangebote min. 1 Cent
+    protected const decimal LikeAcceptThreshold = 0.70m;                 // 70% des Budgets
+    protected const int LowPatienceThreshold = 30;                    // <30% Geduld → eher Abbruch
+    protected const decimal MinCounterPrice = 0.01m;                 // Gegenangebote min. 1 Cent
 
     public void AcceptTrade(IOffer offer)
     {
@@ -101,12 +102,9 @@ public class Customer : ICustomer
             return OfferDecision.Decline;
         }
 
-        static bool SameName(string a, string b) =>
-            string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
-
-        bool likesProduct     = Likes.Any(l => SameName(l.Name, offer.Product.Name));
-        bool mustHaveProduct  = MustHaves != null && MustHaves.Any(m => SameName(m.Name, offer.Product.Name));
-        bool dislikesProduct  = Dislikes.Any(d => SameName(d.Name, offer.Product.Name));
+        bool likesProduct    = Likes.Contains(offer.Product.Type);
+        bool mustHaveProduct = MustHaves.Contains(offer.Product.Type);
+        bool dislikesProduct = Dislikes.Contains(offer.Product.Type);
 
         if (mustHaveProduct && Budget >= offer.Price)
         {
@@ -137,45 +135,42 @@ public class Customer : ICustomer
         Console.WriteLine($"{Name} hat die Verhandlung abgebrochen.");
     }
 
-    protected virtual IProduct? DecideOnProduct(IVendor vendor)
+   protected virtual IProduct? DecideOnProduct(IVendor vendor)
+{
+    if (vendor.Products == null) return null;
+
+    var availableProducts = vendor.Products
+        .Where(p => !Inventory.Any(i => i.Type == p.Type))
+        .ToList();
+
+    var mustHave = availableProducts
+        .FirstOrDefault(p => MustHaves != null && MustHaves.Contains(p.Type));
+    if (mustHave != null)
     {
-        if (vendor.Products == null) return null;
-
-        static bool SameName(string a, string b) =>
-            string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
-
-        var availableProducts = vendor.Products
-            .Where(p => !Inventory.Any(i => SameName(i.Name, p.Name)))
-            .ToList();
-
-        var mustHave = availableProducts
-            .FirstOrDefault(p => MustHaves != null && MustHaves.Any(m => SameName(m.Name, p.Name)));
-        if (mustHave != null)
-        {
-            LastVendorOffer = vendor.GetStartingOffer(mustHave, this);
-            return mustHave;
-        }
-
-        var liked = availableProducts
-            .FirstOrDefault(p => Likes.Any(l => SameName(l.Name, p.Name)));
-        if (liked != null)
-        {
-            LastVendorOffer = vendor.GetStartingOffer(liked, this);
-            return liked;
-        }
-
-        var neutral = availableProducts
-            .Where(p => !Likes.Any(l => SameName(l.Name, p.Name)) &&
-                        !Dislikes.Any(d => SameName(d.Name, p.Name)))
-            .FirstOrDefault();
-        if (neutral != null)
-        {
-            LastVendorOffer = vendor.GetStartingOffer(neutral, this);
-            return neutral;
-        }
-
-        return null;
+        LastVendorOffer = vendor.GetStartingOffer(mustHave, this);
+        return mustHave;
     }
+
+    var liked = availableProducts
+        .FirstOrDefault(p => Likes.Contains(p.Type));
+    if (liked != null)
+    {
+        LastVendorOffer = vendor.GetStartingOffer(liked, this);
+        return liked;
+    }
+
+    var neutral = availableProducts
+        .FirstOrDefault(p => !Likes.Contains(p.Type) &&
+                             !Dislikes.Contains(p.Type));
+    if (neutral != null)
+    {
+        LastVendorOffer = vendor.GetStartingOffer(neutral, this);
+        return neutral;
+    }
+
+    return null;
+}
+
 
     protected virtual IOffer CreateOffer(IProduct product)
     {
@@ -202,8 +197,8 @@ public class Customer : ICustomer
             return newOffer;
         }
 
-        double baseConcession = 0.2; 
-        double elasticityBump = Math.Min((int)Elasticity, 100) / 1000.0; 
+        double baseConcession = 0.2;
+        double elasticityBump = Math.Min((int)Elasticity, 100) / 1000.0;
         double concessionRate = Math.Clamp(baseConcession + elasticityBump, 0.05, 0.6);
 
         double nextPrice = (double)LastCustomerOffer.Price +
@@ -229,12 +224,72 @@ public class Customer : ICustomer
         var pct = prev > 0 ? (double)(delta / prev) : 1.0;
 
         int baseReduction = pct < 0.01
-            ? Random.Shared.Next(0, 12)   
-            : Random.Shared.Next(5, 25);  
+            ? Random.Shared.Next(0, 12)
+            : Random.Shared.Next(5, 25);
 
-        double elasticityMultiplier = 1.0 + Math.Min((int)Elasticity, 100) / 200.0; 
+        double elasticityMultiplier = 1.0 + Math.Min((int)Elasticity, 100) / 200.0;
         int patienceReduction = (int)Math.Round(baseReduction * elasticityMultiplier);
 
         Patience = Math.Clamp((int)Patience - patienceReduction, 0, 100);
+    }
+
+}
+
+public class CustomerFactory : ICustomerFactory
+{
+    public static ICustomer CreateCustomer(string name, int age)
+    {
+        var kind = Random.Shared.Next(0, 3); // 0=Standard, 1=RarityHunter, 2=BudgetGuardian
+        Customer c = kind switch
+        {
+            1 => new RarityHunterCustomer { Name = name, Age = age },
+            2 => new BudgetGuardianCustomer { Name = name, Age = age },
+            _ => new Customer { Name = name, Age = age }
+        };
+
+        SetBudget(c, Random.Shared.Next(1500, 2501));
+        SetElasticity(c, Random.Shared.Next(20, 81)); // 20–80
+
+        var types = Enum.GetValues<ProductType>().ToList();
+        Shuffle(types);
+
+        var mustHaves = new List<ProductType> { types[0] };
+        var likes     = new List<ProductType> { types[1], types[2] };
+        var dislikes  = new List<ProductType> { types[3] };
+
+        SetMustHaves(c, mustHaves);
+        SetLikes(c, likes);
+        SetDislikes(c, dislikes);
+
+        return c;
+    }
+
+    private static void SetBudget(Customer c, decimal value) =>
+        c.GetType().GetProperty("Budget", BindingFlags.Instance | BindingFlags.NonPublic)!
+         .SetValue(c, value);
+
+    private static void SetLikes(Customer c, List<ProductType> value) =>
+        c.GetType().GetProperty("Likes", BindingFlags.Instance | BindingFlags.NonPublic)!
+         .SetValue(c, value);
+
+    private static void SetDislikes(Customer c, List<ProductType> value) =>
+        c.GetType().GetProperty("Dislikes", BindingFlags.Instance | BindingFlags.NonPublic)!
+         .SetValue(c, value);
+
+    private static void SetMustHaves(Customer c, List<ProductType> value) =>
+        c.GetType().GetProperty("MustHaves", BindingFlags.Instance | BindingFlags.NonPublic)!
+         .SetValue(c, value);
+
+    private static void SetElasticity(Customer c, int percentageAsInt) =>
+        c.GetType().GetProperty("Elasticity", BindingFlags.Instance | BindingFlags.NonPublic)!
+         .SetValue(c, (Percentage)percentageAsInt);
+
+    private static void Shuffle<T>(IList<T> list)
+    {
+        for (int i = list.Count - 1; i > 0; i--)
+        {
+            int j = Random.Shared.Next(i + 1);
+            (list[i], list[j]) = (list[j], list[i]);
+        }
     }
 }
