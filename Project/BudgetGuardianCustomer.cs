@@ -113,7 +113,7 @@ public class BudgetGuardianCustomer : Customer
     protected override void UpdatePatience(IOffer newVendorOffer)
     {
         base.UpdatePatience(newVendorOffer);
-        int recover = (int)Math.Round((100 - (int)Patience) * 0.20);
+        int recover = (int)Math.Round((100 - (int)Patience) * 0.05);
         Patience = Math.Clamp((int)Patience + recover, 0, 100);
     }
 }

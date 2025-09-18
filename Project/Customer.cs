@@ -24,7 +24,6 @@ public class Customer : ICustomer
 
     protected int CounterOffersMade { get; set; } = 0;
     protected const int MinCountersBeforeAccept = 2;
-    protected const decimal Epsilon = 0.01m;
     protected const decimal MinMeaningfulOffer = 5m;
     protected const decimal CloseEnoughTolerance = 0.05m;
 
@@ -39,9 +38,9 @@ public class Customer : ICustomer
             return;
         }
 
-        if (LastCustomerOffer != null && R2(offer.Price) > R2(LastCustomerOffer.Price) + Epsilon)
+        if (LastVendorOffer != null && R2(offer.Price) > R2(LastVendorOffer.Price))
         {
-            Console.WriteLine($"{Name} lehnt ab – Preis schlechter als letztes Gegenangebot.");
+            StopTrade();
             return;
         }
 
@@ -107,15 +106,16 @@ public class Customer : ICustomer
         bool likes = Likes.Contains(offer.Product.Type);
         bool mustHave = MustHaves != null && MustHaves.Contains(offer.Product.Type);
 
+        if (((offer.Price > Budget || Patience <= 0 ) && CounterOffersMade >= MinCountersBeforeAccept)
+        || LastVendorOffer != null && offer.Price > LastVendorOffer.Price)
+            return OfferDecision.Decline;
+
         if (LastCustomerOffer != null && CounterOffersMade >= MinCountersBeforeAccept)
         {
             var gap = Math.Abs(offer.Price - LastCustomerOffer.Price);
             var rel = LastCustomerOffer.Price > 0 ? (gap / LastCustomerOffer.Price) : 1.0m;
             if (rel <= CloseEnoughTolerance) return OfferDecision.Accept;
         }
-
-        if (offer.Price > Budget || Patience <= 0 && CounterOffersMade >= MinCountersBeforeAccept)
-            return OfferDecision.Decline;
 
         if (CounterOffersMade < MinCountersBeforeAccept)
             return OfferDecision.Counter;
@@ -140,7 +140,7 @@ public class Customer : ICustomer
         if (vendor.Products == null) return null;
 
         var availableProducts = vendor.Products
-            .Where(p => !Inventory.Any(i => i.Type == p.Type))
+            .Where(p => !Inventory.Any(i => i.Type == p?.Type))
             .ToList();
 
         IProduct? FirstAffordable(IEnumerable<IProduct> seq)
@@ -177,7 +177,8 @@ public class Customer : ICustomer
         {
             Product = product,
             OfferedBy = PersonType.Customer,
-            Status = OfferStatus.Ongoing
+            Status = OfferStatus.Ongoing,
+            
         };
 
         decimal vendor = LastVendorOffer.Price;
@@ -233,7 +234,7 @@ public class Customer : ICustomer
     {
         if (LastVendorOffer == null)
         {
-            int initDrop = Random.Shared.Next(0, 4);
+            int initDrop = Random.Shared.Next(4, 20);
             Patience = Math.Clamp((int)Patience - initDrop, 0, 100);
             return;
         }
@@ -242,7 +243,7 @@ public class Customer : ICustomer
         var delta = Math.Abs(newVendorOffer.Price - prev);
         var pct = prev > 0 ? (double)(delta / prev) : 1.0;
 
-        int baseReduction = pct < 0.01 ? 1 : Random.Shared.Next(3, 12);
+        int baseReduction = pct < 0.01 ? Random.Shared.Next(2, 6) : Random.Shared.Next(6, 12);
 
         double elasticityMultiplier = 1.0 - Math.Min((int)Elasticity, 100) / 200.0;
         if (elasticityMultiplier < 0.1) elasticityMultiplier = 0.1;

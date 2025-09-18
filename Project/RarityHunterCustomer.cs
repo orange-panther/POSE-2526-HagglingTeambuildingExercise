@@ -7,7 +7,7 @@ public class RarityHunterCustomer : Customer
         if (vendor.Products == null) return null;
 
         var pool = vendor.Products
-            .Where(p => Inventory.All(i => i.Type != p.Type))
+            .Where(p => Inventory.All(i => i.Type != p?.Type))
             .Where(p => !Dislikes.Contains(p.Type))
             .ToList();
         if (pool.Count == 0) return null;
