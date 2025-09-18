@@ -256,19 +256,6 @@ public class CustomerFactory : ICustomerFactory
 {
     public static ICustomer CreateCustomer(string name, int age)
     {
-        return new Customer
-        {
-            Name = name,
-            Age = age
-        };
-    }
-}
-
-
-public class CustomerFactory : ICustomerFactory
-{
-    public static ICustomer CreateCustomer(string name, int age)
-    {
         var kind = Random.Shared.Next(0, 3); // 0=Standard, 1=RarityHunter, 2=BudgetGuardian
         Customer c = kind switch
         {
