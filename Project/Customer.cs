@@ -252,6 +252,18 @@ public class Customer : ICustomer
     }
 }
 
+public class CustomerFactory : ICustomerFactory
+{
+    public static ICustomer CreateCustomer(string name, int age)
+    {
+        return new Customer
+        {
+            Name = name,
+            Age = age
+        };
+    }
+}
+
 
 public class CustomerFactory : ICustomerFactory
 {
