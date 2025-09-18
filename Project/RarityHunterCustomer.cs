@@ -56,9 +56,9 @@ public class RarityHunterCustomer : Customer
         var baseDecision = base.EvaluateOfferDecision(offer);
         if (Patience == 0) return OfferDecision.Decline;
 
-        var rarity = offer.Product.Rarity.Value; 
-        bool must  = (MustHaves ?? new()).Contains(offer.Product.Type);
-        bool like  = Likes.Contains(offer.Product.Type);
+        var rarity = offer.Product.Rarity.Value;
+        bool must = (MustHaves ?? new()).Contains(offer.Product.Type);
+        bool like = Likes.Contains(offer.Product.Type);
 
         if (baseDecision == OfferDecision.Counter && rarity >= 90)
         {
@@ -76,19 +76,20 @@ public class RarityHunterCustomer : Customer
         if (LastVendorOffer == null) return offer;
 
         var r = Math.Clamp(product.Rarity.Value, 0, 100);
-        decimal cushionPct = 0.05m + ((50 - r) / 100m) * 0.10m; 
-        if (cushionPct < 0m)  cushionPct = 0m;
+        decimal cushionPct = 0.05m + ((50 - r) / 100m) * 0.10m;
+        if (cushionPct < 0m) cushionPct = 0m;
         if (cushionPct > 0.10m) cushionPct = 0.10m;
 
         decimal vendor = LastVendorOffer.Price;
-        decimal cap    = R2(vendor * (1m - cushionPct)); 
+        decimal cap = R2(vendor * (1m - cushionPct));
 
         decimal price = offer.Price;
         if (price > cap) price = cap;
+        if ( LastCustomerOffer != null && price < LastCustomerOffer.Price) price = LastCustomerOffer.Price * 1.02m;
 
         decimal minOffer = MinMeaningfulOfferFor(vendor);
         if (price < minOffer) price = minOffer;
-        if (price > Budget)   price = Budget;
+        if (price > Budget) price = Budget;
 
         offer.Price = R2(price);
         return offer;

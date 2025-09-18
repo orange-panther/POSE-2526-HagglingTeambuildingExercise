@@ -82,10 +82,12 @@ public class Customer : ICustomer
         {
             case OfferDecision.Accept:
                 offer.Status = OfferStatus.Accepted;
+                offer.OfferedBy = PersonType.Customer;
                 AcceptTrade(offer);
                 return offer;
             case OfferDecision.Decline:
                 offer.Status = OfferStatus.Stopped;
+                offer.OfferedBy = PersonType.Customer;
                 StopTrade();
                 return offer;
             case OfferDecision.Counter:
